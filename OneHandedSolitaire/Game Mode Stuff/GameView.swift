@@ -1,5 +1,5 @@
 //
-//  ContentView.swift
+//  GameView.swift
 //  OneHandedSolitaire
 //
 //  Created by Nolan Law on 2025-07-18.
@@ -7,23 +7,29 @@
 
 import SwiftUI
 
-struct ContentView: View {
+struct GameView: View {
     @ObservedObject var game: GameEngine
     @Environment(\.dismiss) var dismiss
     @State private var scoreSaved = false
     @State private var showQuitAlert = false
     @Namespace private var animation
+    
     var onGameEnd: (() -> Void)? = nil
-    var mode: GameMode = .single
+    var mode: GameMode = .practiceSingle
+    var careerManager: CareerManager?
     
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                LinearGradient(gradient: Gradient(colors: [Color.green, Color.green.opacity(0.85)]),
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                    .ignoresSafeArea()
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.green, Color.green.opacity(0.85)]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .ignoresSafeArea()
 
                 VStack(spacing: 20) {
+                    
                     // Deck & Fan
                     ZStack(alignment: .bottomLeading) {
                         if !game.deck.isEmpty {
@@ -37,42 +43,22 @@ struct ContentView: View {
                         }
 
                         ZStack {
-                            FanView(cards: game.visibleStack, discardedCards: game.discardedCards, animation: animation)
+                            FanView(
+                                cards: game.visibleStack,
+                                discardedCards: game.discardedCards,
+                                animation: animation
+                            )
 
                             Color.clear
                                 .contentShape(Rectangle())
                                 .gesture(
                                     TapGesture()
-                                        .onEnded {
-                                            withAnimation {
-                                                game.drawCard()
-                                            }
-                                        }
+                                        .onEnded { withAnimation { game.drawCard() } }
                                 )
                                 .simultaneousGesture(
                                     DragGesture(minimumDistance: 30)
                                         .onEnded { value in
-                                            let horizontal = value.translation.width
-                                            withAnimation {
-                                                if horizontal > 30 {
-                                                    if game.visibleStack.count >= 4 {
-                                                        let top4 = Array(game.visibleStack.suffix(4))
-                                                        if (top4[0].value == top4[3].value) ||
-                                                            (top4[0].suit == top4[1].suit &&
-                                                             top4[1].suit == top4[2].suit &&
-                                                             top4[2].suit == top4[3].suit) {
-                                                            _ = game.tryDiscard()
-                                                        }
-                                                    }
-                                                } else if horizontal < -30 {
-                                                    if game.visibleStack.count >= 4 {
-                                                        let top4 = Array(game.visibleStack.suffix(4))
-                                                        if top4[0].suit == top4[3].suit {
-                                                            _ = game.tryDiscard()
-                                                        }
-                                                    }
-                                                }
-                                            }
+                                            handleDragGesture(value)
                                         }
                                 )
                         }
@@ -118,7 +104,10 @@ struct ContentView: View {
                         .rotationEffect(.degrees(30))
                         .opacity(0.0)
                         .animation(.easeInOut(duration: 0.6), value: game.cardsBeingDiscarded)
-                        .transition(.asymmetric(insertion: .identity, removal: .move(edge: .trailing).combined(with: .opacity)))
+                        .transition(.asymmetric(
+                            insertion: .identity,
+                            removal: .move(edge: .trailing).combined(with: .opacity)
+                        ))
                         .zIndex(1000)
                 }
             }
@@ -132,7 +121,41 @@ struct ContentView: View {
             }
         }
     }
+    
+    // MARK: - Gesture
+    private func handleDragGesture(_ value: DragGesture.Value) {
+        let horizontal = value.translation.width
+        withAnimation {
+            if horizontal > 30 {
+                tryRightSwipeDiscard()
+            } else if horizontal < -30 {
+                tryLeftSwipeDiscard()
+            }
+        }
+    }
+    
+    private func tryRightSwipeDiscard() {
+        if game.visibleStack.count >= 4 {
+            let top4 = Array(game.visibleStack.suffix(4))
+            if (top4[0].value == top4[3].value) ||
+                (top4[0].suit == top4[1].suit &&
+                 top4[1].suit == top4[2].suit &&
+                 top4[2].suit == top4[3].suit) {
+                _ = game.tryDiscard()
+            }
+        }
+    }
+    
+    private func tryLeftSwipeDiscard() {
+        if game.visibleStack.count >= 4 {
+            let top4 = Array(game.visibleStack.suffix(4))
+            if top4[0].suit == top4[3].suit {
+                _ = game.tryDiscard()
+            }
+        }
+    }
 
+    // MARK: - UI Helpers
     private func statCard(title: String, value: String, icon: String) -> some View {
         VStack(spacing: 6) {
             Image(systemName: icon)
@@ -163,28 +186,54 @@ struct ContentView: View {
         }
     }
 
+    // MARK: - End Game Logic
     private func endGameAndReturnHome() {
-        withAnimation {
-            game.endGame()
-        }
+        withAnimation { game.endGame() }
 
-        if !scoreSaved && mode == .single {
-            let score = game.calculateScore() + game.undosUsed
-            let isWin = game.hasWon
-            ScoreManager.saveScore(to: "singles", score: score, isWin: isWin)
-            scoreSaved = true
-            print("✅ Score saved to singles:", score, "Win:", isWin)
-        } else {
-            print("⛔️ Not saving to singles due to mode =", mode)
+        let score = game.calculateScore() + game.undosUsed
+        let isWin = game.hasWon
+
+        switch mode {
+        case .careerSingle:
+            if !scoreSaved {
+                if let cm = careerManager {
+                    ScoreManager.saveCareerResult(
+                        mode: "singles",
+                        tier: cm.currentTier.rawValue,
+                        placement: cm.currentPlacement,
+                        score: score,
+                        isWin: isWin
+                    )
+                }
+                scoreSaved = true
+                print("✅ Career singles score saved:", score, "Win:", isWin)
+            }
+
+        case .practiceSingle:
+            ScoreManager.savePracticeResult(
+                mode: "singles",
+                score: score,
+                isWin: isWin
+            )
+            print("✅ Practice singles score saved:", score, "Win:", isWin)
+
+        case .practiceDaily:
+            ScoreManager.savePracticeResult(
+                mode: "daily",
+                score: score,
+                isWin: isWin
+            )
+            print("✅ Daily practice score saved:", score, "Win:", isWin)
+
+        case .practiceAo3, .careerAo3:
+            print("➡️ Passing score to Ao3 flow (handled in Ao3GameView).")
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             scoreSaved = false
-
-            if mode == .single {
+            if mode == .careerSingle || mode == .practiceSingle {
                 game.startNewGame()
             }
-
             onGameEnd?() ?? dismiss()
         }
     }

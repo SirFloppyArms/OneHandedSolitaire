@@ -10,52 +10,83 @@ import SwiftUI
 struct HomeView: View {
     @EnvironmentObject var authViewModel: AuthViewModel
 
-    @State private var showSingleGame = false
-    @State private var showAo3Game = false
-    @State private var showTournament = false
+    @State private var showCareer = false
+    @State private var showPractice = false
+    @State private var showLeaderboard = false
+    @State private var showSettings = false
 
     var body: some View {
         NavigationStack {
-            VStack(spacing: 30) {
-                Text("One-Handed Solitaire")
+            VStack(spacing: 24) {
+                Text("One‑Handed Solitaire")
                     .font(.largeTitle.bold())
                     .foregroundColor(.white)
-                    .padding(.top)
+                    .padding(.top, 10)
 
-                VStack(spacing: 20) {
-                    NavigationLink(destination: ContentView(game: GameEngine()), isActive: $showSingleGame) {
-                        Button("▶️ Single Game") {
-                            showSingleGame = true
-                        }
-                        .buttonStyle(HomeButtonStyle())
+                // Score Meter Card
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack {
+                        Text("Score Meter")
+                            .font(.headline)
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text("\(authViewModel.scoreMeter)")
+                            .font(.title2.bold())
+                            .foregroundColor(.white)
                     }
 
-                    NavigationLink(destination: Ao3GameView(), isActive: $showAo3Game) {
-                        Button("📉 Ao3") {
-                            showAo3Game = true
+                    // Simple horizontal meter
+                    GeometryReader { geo in
+                        let pct = CGFloat(authViewModel.scoreMeter) / 100.0
+                        ZStack(alignment: .leading) {
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.black.opacity(0.15))
+                                .frame(height: 18)
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color.blue.opacity(0.9))
+                                .frame(width: max(10, geo.size.width * pct), height: 18)
+                                .animation(.easeInOut, value: authViewModel.scoreMeter)
                         }
-                        .buttonStyle(HomeButtonStyle())
                     }
-
-                    NavigationLink(destination: TournamentView(), isActive: $showTournament) {
-                        Button("🏆 Tournament") {
-                            showTournament = true
-                        }
-                        .buttonStyle(HomeButtonStyle())
-                    }
+                    .frame(height: 18)
                 }
+                .padding()
+                .background(Color.black.opacity(0.12))
+                .cornerRadius(12)
+                .padding(.horizontal)
 
-                HStack(spacing: 40) {
-                    NavigationLink(destination: LeaderboardView()) {
+                // Main buttons
+                VStack(spacing: 14) {
+                    NavigationLink(destination: ModeSelectionView()
+                        .environmentObject(authViewModel)) {
+                        Label("Career", systemImage: "flag.circle")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                    }
+                    .buttonStyle(HomeButtonStyle())
+
+                    Button(action: { showPractice = true }) {
+                        Label("Practice", systemImage: "play.circle")
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                    }
+                    .buttonStyle(HomeButtonStyle())
+
+                    Button(action: { showLeaderboard = true }) {
                         Label("Leaderboard", systemImage: "chart.bar")
+                            .frame(maxWidth: .infinity)
+                            .padding()
                     }
+                    .buttonStyle(HomeButtonStyle())
 
-                    NavigationLink(destination: SettingsView()) {
+                    Button(action: { showSettings = true }) {
                         Label("Settings", systemImage: "gearshape")
+                            .frame(maxWidth: .infinity)
+                            .padding()
                     }
+                    .buttonStyle(HomeButtonStyle())
                 }
-                .foregroundColor(.white)
-                .font(.subheadline)
+                .padding(.horizontal)
 
                 Spacer()
 
@@ -63,17 +94,32 @@ struct HomeView: View {
                     authViewModel.signOut()
                 }
                 .foregroundColor(.red)
+                .padding(.bottom, 16)
             }
-            .padding()
+            .padding(.top)
             .background(
-                LinearGradient(gradient: Gradient(colors: [Color.green, Color.green.opacity(0.85)]),
-                               startPoint: .topLeading,
-                               endPoint: .bottomTrailing)
+                LinearGradient(colors: [Color.green, Color.green.opacity(0.85)], startPoint: .topLeading, endPoint: .bottomTrailing)
                     .ignoresSafeArea()
             )
+            // Navigation destinations
+            .navigationDestination(isPresented: $showCareer) {
+                ModeSelectionView()
+                    .environmentObject(authViewModel)
+            }
+            .navigationDestination(isPresented: $showPractice) {
+                PracticeSelectionView()
+                    .environmentObject(authViewModel)
+            }
+            .navigationDestination(isPresented: $showLeaderboard) {
+                LeaderboardView()
+            }
+            .navigationDestination(isPresented: $showSettings) {
+                SettingsView()
+            }
         }
     }
 }
+
 
 struct HomeButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

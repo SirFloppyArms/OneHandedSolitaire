@@ -15,17 +15,20 @@ struct Ao3GameView: View {
     @State private var scores: [(score: Int, isWin: Bool)] = []
     @Environment(\.dismiss) var dismiss
 
+    var mode: GameMode
+
     var body: some View {
         VStack(spacing: 20) {
             Text("Game \(gameCount)/4")
                 .font(.title)
 
-            ContentView(game: game, onGameEnd: handleGameEnd, mode: .ao3)
+            GameView(game: game, onGameEnd: handleGameEnd, mode: mode)
 
             Spacer()
         }
     }
 
+    // Saves to either practice or career leaderboard
     private func saveAo3Score() {
         guard scores.count == 4 else {
             print("❌ Not enough scores")
@@ -44,9 +47,17 @@ struct Ao3GameView: View {
         }
 
         let db = Firestore.firestore()
-        let doc = db.collection("ao3").document()
+        let collectionPath: CollectionReference
 
-        db.collection("users").document(user.uid).getDocument { snapshot, error in
+        if mode == .careerAo3 {
+            collectionPath = db.collection("career").document("ao3").collection("results")
+        } else { // practice Ao3
+            collectionPath = db.collection("practice").document("ao3").collection("results")
+        }
+
+        let doc = collectionPath.document()
+
+        db.collection("users").document(user.uid).getDocument { snapshot, _ in
             let username = snapshot?.data()?["username"] as? String ?? "Unknown"
 
             doc.setData([
@@ -60,12 +71,12 @@ struct Ao3GameView: View {
                 if let error = error {
                     print("❌ Error saving Ao3: \(error.localizedDescription)")
                 } else {
-                    print("✅ Ao3 saved:", average, "from scores:", scores)
+                    print("✅ \(mode) Ao3 saved:", average, "from scores:", scores)
                 }
             }
         }
     }
-    
+
     private func handleGameEnd() {
         let score = game.calculateScore() + game.undosUsed
         let isWin = game.hasWon

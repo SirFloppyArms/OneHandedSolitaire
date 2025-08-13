@@ -23,13 +23,19 @@ class GameEngine: ObservableObject {
     }
 
     private var inRecyclePhase = false
+    private var deckSeed: Int? = nil
+    private var deckLuckiness: Double = 1.0
 
-    init() {
-        startNewGame()
+    init(seed: Int? = nil, luckiness: Double = 1.0) {
+        self.deckSeed = seed
+        self.deckLuckiness = luckiness
+        startNewGame(seed: seed, luckiness: luckiness)
     }
 
-    func startNewGame() {
-        deck.reset()
+    func startNewGame(seed: Int? = nil, luckiness: Double = 1.0) {
+        deckSeed = seed ?? deckSeed
+        deckLuckiness = luckiness
+        deck.reset(seed: deckSeed, luckiness: deckLuckiness)
         visibleStack.removeAll()
         discardedCards.removeAll()
         cardsBeingDiscarded.removeAll()
@@ -38,6 +44,7 @@ class GameEngine: ObservableObject {
         hasWon = false
         inRecyclePhase = false
         undosUsed = 0
+        gameHistory.removeAll()
 
         for _ in 0..<4 {
             drawCard()
